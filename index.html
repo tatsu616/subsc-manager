@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>サブスク管理 - SubscManager</title>
+
+  <!-- PWA & iOS ホーム画面アプリ化設定 -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#4f46e5" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="サブスク管理" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="header-title" id="headerLogoHome" title="ホームに戻る（契約中一覧・絞り込み解除）">
+        <span class="logo-icon">💳</span>
+        <div>
+          <h1>サブスク管理</h1>
+          <p class="subtitle">定額サービスをシンプルに一覧・コスト把握</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="homeBtn" class="btn btn-secondary" title="契約中一覧（絞り込み前）を表示">
+          <span>🏠</span> ホーム
+        </button>
+        <button id="toggleCanceledPageBtn" class="btn btn-secondary">
+          <span>📁</span> 解約済みリスト <span id="canceledCountBadge" class="count-pill">0</span>
+        </button>
+        <button id="openCategoryModalBtn" class="btn btn-secondary">
+          <span>🏷️</span> カテゴリ管理
+        </button>
+        <button id="openPaymentModalBtn" class="btn btn-secondary">
+          <span>💳</span> 支払い方法管理
+        </button>
+        <button id="openDataModalBtn" class="btn btn-secondary">
+          <span>💾</span> データ入出力
+        </button>
+        <button id="openModalBtn" class="btn btn-primary">
+          <span>＋</span> サブスクを追加
+        </button>
+      </div>
+    </header>
+
+    <!-- ==================== 通常画面（契約中ビュー） ==================== -->
+    <div id="activePageView">
+      <!-- サマリーカード -->
+      <section class="summary-grid" aria-label="支出サマリー">
+        <div class="summary-card highlight">
+          <span class="summary-label">月額換算 合計</span>
+          <div class="summary-value" id="monthlyTotal">¥0</div>
+          <span class="summary-note">年額プランは12ヶ月割りで合算</span>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">年間 合計予測</span>
+          <div class="summary-value" id="yearlyTotal">¥0</div>
+          <span class="summary-note">月額プラン×12ヶ月＋年額プラン</span>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">契約中のサービス数</span>
+          <div class="summary-value" id="activeCount">0<span class="unit">件</span></div>
+          <span class="summary-note" id="cycleBreakdown">月額 0件 / 年額 0件</span>
+        </div>
+      </section>
+
+      <!-- フィルター＆並び替えバー -->
+      <section class="toolbar">
+        <div class="filter-group">
+          <button class="chip active" data-filter="all">すべて</button>
+          <button class="chip" data-filter="monthly">月額のみ</button>
+          <button class="chip" data-filter="yearly">年額のみ</button>
+        </div>
+        <div class="toolbar-right">
+          <div class="sort-group">
+            <label for="categoryFilterSelect">カテゴリ:</label>
+            <select id="categoryFilterSelect">
+              <option value="all">すべて表示</option>
+            </select>
+          </div>
+          <div class="sort-group">
+            <label for="paymentFilterSelect">支払い方法:</label>
+            <select id="paymentFilterSelect">
+              <option value="all">すべて表示</option>
+            </select>
+          </div>
+          <div class="sort-group">
+            <label for="sortSelect">並び替え:</label>
+            <select id="sortSelect">
+              <option value="created-desc">登録が新しい順</option>
+              <option value="started-desc">契約開始日が新しい順</option>
+              <option value="started-asc">契約開始日が古い順（長期順）</option>
+              <option value="price-desc">月額換算が高い順</option>
+              <option value="price-asc">月額換算が安い順</option>
+              <option value="name-asc">サービス名順</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- 契約中サブスク一覧 -->
+      <main>
+        <div id="subscriptionList" class="subscription-list"></div>
+
+        <!-- 空状態 -->
+        <div id="emptyState" class="empty-state hidden">
+          <div class="empty-icon">📭</div>
+          <h2>契約中のサブスクがありません</h2>
+          <p>右上の「＋ サブスクを追加」ボタンから、契約中のサービスを登録しましょう。</p>
+          <button id="emptyAddBtn" class="btn btn-primary">最初のサブスクを登録する</button>
+        </div>
+      </main>
+    </div>
+
+    <!-- ==================== 解約済みサブスク画面 ==================== -->
+    <div id="canceledPageView" class="hidden">
+      <div class="canceled-page-header">
+        <div>
+          <h2 class="canceled-page-title">📁 解約済みサブスク一覧</h2>
+          <p class="canceled-page-subtitle">過去に解約したサブスクと契約期間・解約日の記録です（通常画面の合計には含まれません）</p>
+        </div>
+        <button id="backToActiveBtn" class="btn btn-secondary">
+          ← 契約中の一覧に戻る
+        </button>
+      </div>
+
+      <!-- 解約済みサマリー -->
+      <section class="summary-grid" aria-label="解約済みサマリー">
+        <div class="summary-card canceled-highlight">
+          <span class="summary-label">解約済みのサービス数</span>
+          <div class="summary-value" id="canceledTotalCount">0<span class="unit">件</span></div>
+          <span class="summary-note">過去に解約したサブスク</span>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">解約で浮いた月額合計</span>
+          <div class="summary-value" id="canceledMonthlySaved">¥0</div>
+          <span class="summary-note">毎月節約できている金額（換算）</span>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">解約で浮いた年額合計</span>
+          <div class="summary-value" id="canceledYearlySaved">¥0</div>
+          <span class="summary-note">年間で節約できている金額</span>
+        </div>
+      </section>
+
+      <section class="toolbar">
+        <div class="sort-group">
+          <label for="canceledSortSelect">並び替え:</label>
+          <select id="canceledSortSelect">
+            <option value="canceled-desc">解約日が新しい順</option>
+            <option value="canceled-asc">解約日が古い順</option>
+            <option value="started-asc">契約開始日が古い順</option>
+            <option value="price-desc">金額が高い順</option>
+            <option value="name-asc">サービス名順</option>
+          </select>
+        </div>
+        <button id="addCanceledDirectlyBtn" class="btn btn-secondary btn-sm">
+          ＋ 過去に解約したサブスクを直接追加
+        </button>
+      </section>
+
+      <main>
+        <div id="canceledSubscriptionList" class="subscription-list"></div>
+
+        <div id="canceledEmptyState" class="empty-state hidden">
+          <div class="empty-icon">🗂️</div>
+          <h2>解約済みのサブスクはありません</h2>
+          <p>契約中のサブスクの「解約済みにする」ボタンを押すと、解約日とともにここへ記録されます。</p>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- サブスク登録・編集モーダル -->
+  <div id="modalOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="modalTitle">サブスクを追加</h2>
+        <button id="closeModalBtn" class="icon-btn" aria-label="閉じる">✕</button>
+      </div>
+
+      <form id="subscriptionForm">
+        <input type="hidden" id="subId" />
+
+        <div class="form-group">
+          <label for="serviceName">サービス名 <span class="required">*</span></label>
+          <input
+            type="text"
+            id="serviceName"
+            placeholder="例: Netflix, Spotify, Amazon Prime..."
+            required
+            maxlength="60"
+          />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="price">金額 (円) <span class="required">*</span></label>
+            <input
+              type="number"
+              id="price"
+              placeholder="例: 1490"
+              min="0"
+              step="1"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="billingCycle">支払いサイクル <span class="required">*</span></label>
+            <select id="billingCycle" required>
+              <option value="monthly">月額（毎月払い）</option>
+              <option value="yearly">年額（年1回払い）</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 契約開始日 ＆ 契約ステータス ＆ 解約日 -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="startedDateInput">契約開始日</label>
+            <input type="date" id="startedDateInput" />
+          </div>
+
+          <div class="form-group">
+            <label for="subStatus">ステータス</label>
+            <select id="subStatus">
+              <option value="active">🟢 契約中</option>
+              <option value="canceled">📁 解約済み</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group hidden" id="canceledDateGroup">
+          <label for="canceledDateInput">解約日 <span class="required">*</span></label>
+          <input type="date" id="canceledDateInput" />
+        </div>
+
+        <!-- カテゴリ選択＋クイック追加 -->
+        <div class="form-group">
+          <div class="label-with-action">
+            <label for="category">カテゴリ</label>
+            <button type="button" id="toggleQuickCategoryBtn" class="link-btn">
+              ＋ 新しいカテゴリを作成
+            </button>
+          </div>
+          <select id="category"></select>
+
+          <div id="quickCategoryBox" class="quick-category-box hidden">
+            <div class="quick-category-title">新しいカテゴリを追加</div>
+            <div class="quick-category-inputs">
+              <input
+                type="text"
+                id="quickCatIcon"
+                class="icon-input"
+                value="🏷️"
+                maxlength="4"
+                title="アイコン（絵文字）"
+                aria-label="カテゴリ絵文字"
+              />
+              <input
+                type="text"
+                id="quickCatLabel"
+                placeholder="カテゴリ名（例: 推し活、ニュース）"
+                maxlength="24"
+              />
+              <button type="button" id="addQuickCategoryBtn" class="btn btn-primary btn-sm">追加</button>
+            </div>
+            <div class="emoji-presets" id="quickEmojiPresets"></div>
+          </div>
+        </div>
+
+        <!-- 支払い方法選択＋クイック追加 -->
+        <div class="form-group">
+          <div class="label-with-action">
+            <label for="paymentMethod">支払い方法</label>
+            <button type="button" id="toggleQuickPaymentBtn" class="link-btn">
+              ＋ 新しい支払い方法を作成
+            </button>
+          </div>
+          <select id="paymentMethod"></select>
+
+          <div id="quickPaymentBox" class="quick-category-box hidden">
+            <div class="quick-category-title">新しい支払い方法（カード名・決済サービス等）を追加</div>
+            <div class="quick-category-inputs">
+              <input
+                type="text"
+                id="quickPayIcon"
+                class="icon-input"
+                value="💳"
+                maxlength="4"
+                title="アイコン（絵文字）"
+                aria-label="支払い方法絵文字"
+              />
+              <input
+                type="text"
+                id="quickPayLabel"
+                placeholder="例: 楽天カード、三井住友カード、PayPay"
+                maxlength="28"
+              />
+              <button type="button" id="addQuickPaymentBtn" class="btn btn-primary btn-sm">追加</button>
+            </div>
+            <div class="emoji-presets" id="quickPaymentEmojiPresets"></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="memo">メモ（任意）</label>
+          <input
+            type="text"
+            id="memo"
+            placeholder="例: ファミリープラン、解約理由など"
+            maxlength="80"
+          />
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="cancelBtn" class="btn btn-secondary">キャンセル</button>
+          <button type="submit" id="saveBtn" class="btn btn-primary">保存する</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 解約手続き（解約日入力）モーダル -->
+  <div id="cancelSubModalOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="cancelSubModalTitle">
+    <div class="modal-card" style="max-width: 420px;">
+      <div class="modal-header">
+        <h2 id="cancelSubModalTitle">📁 解約済みに移動</h2>
+        <button id="closeCancelSubModalBtn" class="icon-btn" aria-label="閉じる">✕</button>
+      </div>
+      <form id="cancelSubForm">
+        <input type="hidden" id="cancelTargetSubId" />
+        <p id="cancelTargetSubName" style="font-weight: 700; margin-bottom: 14px; color: var(--text-main);"></p>
+
+        <div class="form-group">
+          <label for="confirmCancelDate">解約日 <span class="required">*</span></label>
+          <input type="date" id="confirmCancelDate" required />
+        </div>
+
+        <div class="form-group">
+          <label for="confirmCancelMemo">メモ（解約理由など・任意）</label>
+          <input type="text" id="confirmCancelMemo" placeholder="例: 見なくなったため解約" maxlength="80" />
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="abortCancelSubBtn" class="btn btn-secondary">戻る</button>
+          <button type="submit" class="btn btn-primary">解約済みリストへ移動</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- カテゴリ管理モーダル -->
+  <div id="categoryModalOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="categoryModalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="categoryModalTitle">🏷️ カテゴリの管理</h2>
+        <button id="closeCategoryModalBtn" class="icon-btn" aria-label="閉じる">✕</button>
+      </div>
+
+      <form id="categoryManageForm" class="category-add-form">
+        <div class="form-group" style="margin-bottom: 10px;">
+          <label for="manageCatLabel">新しいカテゴリを追加</label>
+          <div class="quick-category-inputs">
+            <input
+              type="text"
+              id="manageCatIcon"
+              class="icon-input"
+              value="✨"
+              maxlength="4"
+              required
+              aria-label="アイコン"
+            />
+            <input
+              type="text"
+              id="manageCatLabel"
+              placeholder="カテゴリ名を入力（例: クラウド、美容）"
+              maxlength="24"
+              required
+            />
+            <button type="submit" class="btn btn-primary btn-sm">追加</button>
+          </div>
+          <div class="emoji-presets" id="manageEmojiPresets"></div>
+        </div>
+      </form>
+
+      <div class="category-list-header">
+        <span>登録済みカテゴリ一覧</span>
+        <button type="button" id="resetCategoriesBtn" class="link-btn">初期状態に戻す</button>
+      </div>
+      <div id="categoryManageList" class="category-manage-list"></div>
+
+      <div class="modal-actions">
+        <button type="button" id="doneCategoryModalBtn" class="btn btn-primary">完了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 支払い方法管理モーダル -->
+  <div id="paymentModalOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="paymentModalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="paymentModalTitle">💳 支払い方法の管理</h2>
+        <button id="closePaymentModalBtn" class="icon-btn" aria-label="閉じる">✕</button>
+      </div>
+
+      <form id="paymentManageForm" class="category-add-form">
+        <div class="form-group" style="margin-bottom: 10px;">
+          <label for="managePayLabel">新しい支払い方法を追加</label>
+          <div class="quick-category-inputs">
+            <input
+              type="text"
+              id="managePayIcon"
+              class="icon-input"
+              value="💳"
+              maxlength="4"
+              required
+              aria-label="アイコン"
+            />
+            <input
+              type="text"
+              id="managePayLabel"
+              placeholder="例: 楽天カード (末尾1234)、メイン口座"
+              maxlength="28"
+              required
+            />
+            <button type="submit" class="btn btn-primary btn-sm">追加</button>
+          </div>
+          <div class="emoji-presets" id="managePaymentEmojiPresets"></div>
+        </div>
+      </form>
+
+      <div class="category-list-header">
+        <span>登録済み支払い方法（契約中の月額引落内訳）</span>
+        <button type="button" id="resetPaymentsBtn" class="link-btn">初期状態に戻す</button>
+      </div>
+      <div id="paymentManageList" class="category-manage-list"></div>
+
+      <div class="modal-actions">
+        <button type="button" id="donePaymentModalBtn" class="btn btn-primary">完了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- データ入出力（エクスポート・インポート）モーダル -->
+  <div id="dataModalOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="dataModalTitle">
+    <div class="modal-card" style="max-width: 540px;">
+      <div class="modal-header">
+        <h2 id="dataModalTitle">💾 データのバックアップ・復元</h2>
+        <button id="closeDataModalBtn" class="icon-btn" aria-label="閉じる">✕</button>
+      </div>
+
+      <!-- エクスポート（書き出し） -->
+      <div class="data-section">
+        <h3 class="data-section-title">📤 エクスポート（データの書き出し）</h3>
+        <p class="data-section-desc">
+          サブスク管理データ（契約中・解約済み）と、設定データ（カテゴリ・支払い方法）をまとめて保存できます。
+        </p>
+        <div id="exportSummaryInfo" class="data-summary-box"></div>
+
+        <div class="data-btn-grid">
+          <button type="button" id="exportJsonBtn" class="btn btn-primary">
+            📥 JSONファイルで保存（全データ完全バックアップ）
+          </button>
+          <div class="data-btn-row">
+            <button type="button" id="copyJsonBtn" class="btn btn-secondary" style="flex: 1;">
+              📋 バックアップ文字列をコピー
+            </button>
+            <button type="button" id="exportCsvBtn" class="btn btn-secondary" style="flex: 1;">
+              📊 CSVで出力（Excel用）
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- インポート（読み込み・復元） -->
+      <div class="data-section">
+        <h3 class="data-section-title">📥 インポート（データの読み込み・復元）</h3>
+        <p class="data-section-desc">
+          保存したJSONファイル、またはコピーしたバックアップ文字列から設定とサブスクデータを復元します。
+        </p>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="importModeSelect">読み込み方法</label>
+          <select id="importModeSelect">
+            <option value="overwrite">🔄 上書き復元（現在のデータをバックアップ内容で置き換える）</option>
+            <option value="merge">➕ 追加統合（現在のデータを残したままバックアップ分を追加する）</option>
+          </select>
+        </div>
+
+        <div class="data-btn-grid">
+          <input type="file" id="importFileInput" accept=".json,application/json" class="hidden" />
+          <button type="button" id="triggerImportFileBtn" class="btn btn-secondary">
+            📂 JSONファイルを選択してインポート
+          </button>
+        </div>
+
+        <div class="paste-import-box">
+          <label for="importPasteTextarea">またはバックアップ文字列を貼り付けて復元:</label>
+          <textarea
+            id="importPasteTextarea"
+            rows="3"
+            placeholder="コピーしたJSONバックアップ文字列をここに貼り付け..."
+          ></textarea>
+          <button type="button" id="importFromTextBtn" class="btn btn-secondary btn-sm" style="align-self: flex-end;">
+            貼り付けたデータから復元する
+          </button>
+        </div>
+
+        <div id="dataFeedbackMsg" class="data-feedback hidden"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="doneDataModalBtn" class="btn btn-primary">閉じる</button>
+      </div>
+
+      <!-- データ保管場所パス表示 -->
+      <footer class="app-footer">
+        <div id="storagePathInfo">
+          データ保管場所: /Users/tatsu/.gemini/antigravity/scratch/subsc-manager （ブラウザ localStorage: subsc_manager_items_v1）
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
