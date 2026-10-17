@@ -92,7 +92,7 @@ let currentCategoryFilter = 'all';
 let currentPaymentFilter = 'all';
 let currentSort = 'created-desc';
 let currentCanceledSort = 'canceled-desc';
-let isViewingCanceledPage = false;
+let currentPage = 'active'; // 'active' | 'canceled' | 'category' | 'payment'
 
 // インライン編集中のID
 let editingCategoryId = null;
@@ -101,9 +101,13 @@ let editingPaymentId = null;
 // DOM Elements
 const activePageView = document.getElementById('activePageView');
 const canceledPageView = document.getElementById('canceledPageView');
+const categoryPageView = document.getElementById('categoryPageView');
+const paymentPageView = document.getElementById('paymentPageView');
 const toggleCanceledPageBtn = document.getElementById('toggleCanceledPageBtn');
 const canceledCountBadge = document.getElementById('canceledCountBadge');
 const backToActiveBtn = document.getElementById('backToActiveBtn');
+const backFromCategoryBtn = document.getElementById('backFromCategoryBtn');
+const backFromPaymentBtn = document.getElementById('backFromPaymentBtn');
 const addCanceledDirectlyBtn = document.getElementById('addCanceledDirectlyBtn');
 
 const subscriptionListEl = document.getElementById('subscriptionList');
@@ -163,28 +167,24 @@ const quickPayLabel = document.getElementById('quickPayLabel');
 const addQuickPaymentBtn = document.getElementById('addQuickPaymentBtn');
 const quickPaymentEmojiPresets = document.getElementById('quickPaymentEmojiPresets');
 
-// カテゴリ管理モーダルDOM
+// カテゴリ管理ページDOM
 const openCategoryModalBtn = document.getElementById('openCategoryModalBtn');
-const categoryModalOverlay = document.getElementById('categoryModalOverlay');
-const closeCategoryModalBtn = document.getElementById('closeCategoryModalBtn');
-const doneCategoryModalBtn = document.getElementById('doneCategoryModalBtn');
 const categoryManageForm = document.getElementById('categoryManageForm');
 const manageCatIcon = document.getElementById('manageCatIcon');
 const manageCatLabel = document.getElementById('manageCatLabel');
 const manageEmojiPresets = document.getElementById('manageEmojiPresets');
 const categoryManageList = document.getElementById('categoryManageList');
+const sortCategoriesByAmountBtn = document.getElementById('sortCategoriesByAmountBtn');
 const resetCategoriesBtn = document.getElementById('resetCategoriesBtn');
 
-// 支払い方法管理モーダルDOM
+// 支払い方法管理ページDOM
 const openPaymentModalBtn = document.getElementById('openPaymentModalBtn');
-const paymentModalOverlay = document.getElementById('paymentModalOverlay');
-const closePaymentModalBtn = document.getElementById('closePaymentModalBtn');
-const donePaymentModalBtn = document.getElementById('donePaymentModalBtn');
 const paymentManageForm = document.getElementById('paymentManageForm');
 const managePayIcon = document.getElementById('managePayIcon');
 const managePayLabel = document.getElementById('managePayLabel');
 const managePaymentEmojiPresets = document.getElementById('managePaymentEmojiPresets');
 const paymentManageList = document.getElementById('paymentManageList');
+const sortPaymentsByAmountBtn = document.getElementById('sortPaymentsByAmountBtn');
 const resetPaymentsBtn = document.getElementById('resetPaymentsBtn');
 
 // データ入出力モーダルDOM
@@ -216,6 +216,9 @@ function init() {
   loadCategories();
   loadPayments();
   loadFromStorage();
+
+  sortCategoriesByAmountDesc();
+  sortPaymentsByAmountDesc();
 
   renderEmojiPresets(quickEmojiPresets, quickCatIcon, EMOJI_PRESETS);
   renderEmojiPresets(manageEmojiPresets, manageCatIcon, EMOJI_PRESETS);
@@ -510,15 +513,119 @@ function updatePayment(payId, newIconStr, newLabelStr) {
   return true;
 }
 
+function moveCategory(catId, direction) {
+  const idx = categories.findIndex((c) => c.id === catId);
+  if (idx === -1) return;
+  const targetIdx = idx + direction;
+  if (targetIdx < 0 || targetIdx >= categories.length) return;
+
+  const copy = [...categories];
+  const [moved] = copy.splice(idx, 1);
+  copy.splice(targetIdx, 0, moved);
+  categories = copy;
+
+  saveCategories();
+  renderCategoryOptions();
+  renderCategoryManageList();
+}
+
+function reorderCategoryByIndex(fromIdx, toIdx) {
+  if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0 || fromIdx >= categories.length || toIdx >= categories.length) {
+    return;
+  }
+  const copy = [...categories];
+  const [moved] = copy.splice(fromIdx, 1);
+  copy.splice(toIdx, 0, moved);
+  categories = copy;
+
+  saveCategories();
+  renderCategoryOptions();
+  renderCategoryManageList();
+}
+
+function movePayment(payId, direction) {
+  const idx = paymentMethods.findIndex((p) => p.id === payId);
+  if (idx === -1) return;
+  const targetIdx = idx + direction;
+  if (targetIdx < 0 || targetIdx >= paymentMethods.length) return;
+
+  const copy = [...paymentMethods];
+  const [moved] = copy.splice(idx, 1);
+  copy.splice(targetIdx, 0, moved);
+  paymentMethods = copy;
+
+  savePayments();
+  renderPaymentOptions();
+  renderPaymentManageList();
+}
+
+function reorderPaymentByIndex(fromIdx, toIdx) {
+  if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0 || fromIdx >= paymentMethods.length || toIdx >= paymentMethods.length) {
+    return;
+  }
+  const copy = [...paymentMethods];
+  const [moved] = copy.splice(fromIdx, 1);
+  copy.splice(toIdx, 0, moved);
+  paymentMethods = copy;
+
+  savePayments();
+  renderPaymentOptions();
+  renderPaymentManageList();
+}
+
+let draggedCategoryIndex = null;
+let draggedPaymentIndex = null;
+
+function getCategoryMonthlyTotal(catId) {
+  return Math.round(
+    subscriptions
+      .filter((s) => s.status !== 'canceled' && s.category === catId)
+      .reduce((sum, s) => sum + getMonthlyEquivalent(s), 0)
+  );
+}
+
+function getPaymentMonthlyTotal(payId) {
+  return Math.round(
+    subscriptions
+      .filter((s) => s.status !== 'canceled' && (s.paymentMethod || 'other_pay') === payId)
+      .reduce((sum, s) => sum + getMonthlyEquivalent(s), 0)
+  );
+}
+
+function sortCategoriesByAmountDesc() {
+  categories = [...categories].sort(
+    (a, b) => getCategoryMonthlyTotal(b.id) - getCategoryMonthlyTotal(a.id)
+  );
+  saveCategories();
+  renderCategoryOptions();
+}
+
+function sortPaymentsByAmountDesc() {
+  paymentMethods = [...paymentMethods].sort(
+    (a, b) => getPaymentMonthlyTotal(b.id) - getPaymentMonthlyTotal(a.id)
+  );
+  savePayments();
+  renderPaymentOptions();
+}
+
 function renderCategoryManageList() {
   categoryManageList.innerHTML = '';
 
-  categories.forEach((cat) => {
-    const usedCount = subscriptions.filter((s) => s.status !== 'canceled' && s.category === cat.id).length;
+  categories.forEach((cat, idx) => {
+    const activeSubsForCat = subscriptions.filter(
+      (s) => s.status !== 'canceled' && s.category === cat.id
+    );
+    const usedCount = activeSubsForCat.length;
+    const monthlySubtotal = Math.round(
+      activeSubsForCat.reduce((sum, s) => sum + getMonthlyEquivalent(s), 0)
+    );
     const isEditing = editingCategoryId === cat.id;
+    const isFirst = idx === 0;
+    const isLast = idx === categories.length - 1;
 
     const row = document.createElement('div');
     row.className = 'category-manage-item' + (isEditing ? ' editing' : '');
+    row.dataset.index = String(idx);
 
     if (isEditing) {
       row.innerHTML = `
@@ -544,14 +651,21 @@ function renderCategoryManageList() {
         </div>
       `;
     } else {
+      row.draggable = true;
       row.innerHTML = `
         <div class="category-manage-left">
+          <span class="drag-handle" title="ドラッグして並び替え">⠿</span>
+          <div class="order-btn-group">
+            <button type="button" class="order-btn cat-up-btn" data-id="${cat.id}" ${isFirst ? 'disabled' : ''} title="上へ移動" aria-label="上へ移動">↑</button>
+            <button type="button" class="order-btn cat-down-btn" data-id="${cat.id}" ${isLast ? 'disabled' : ''} title="下へ移動" aria-label="下へ移動">↓</button>
+          </div>
           <span>${escapeHtml(cat.icon)}</span>
           <span>${escapeHtml(cat.label)}</span>
           ${!cat.isDefault ? '<span class="category-badge-custom">カスタム</span>' : ''}
           <span style="font-size:0.75rem; color:var(--text-sub); font-weight:400;">(契約中 ${usedCount}件)</span>
         </div>
         <div class="manage-item-right">
+          <span class="payment-subtotal" title="このカテゴリの月額換算合計">月 ${formatYen(monthlySubtotal)}</span>
           <button type="button" class="action-btn cat-edit-btn" data-id="${cat.id}">編集</button>
           ${
             cat.id !== 'other'
@@ -560,6 +674,33 @@ function renderCategoryManageList() {
           }
         </div>
       `;
+
+      row.addEventListener('dragstart', (e) => {
+        draggedCategoryIndex = idx;
+        row.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      row.addEventListener('dragend', () => {
+        draggedCategoryIndex = null;
+        row.classList.remove('dragging');
+        categoryManageList.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+      });
+      row.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (draggedCategoryIndex === null || draggedCategoryIndex === idx) return;
+        row.classList.add('drag-over');
+      });
+      row.addEventListener('dragleave', () => {
+        row.classList.remove('drag-over');
+      });
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        row.classList.remove('drag-over');
+        if (draggedCategoryIndex !== null && draggedCategoryIndex !== idx) {
+          reorderCategoryByIndex(draggedCategoryIndex, idx);
+        }
+        draggedCategoryIndex = null;
+      });
     }
 
     categoryManageList.appendChild(row);
@@ -592,16 +733,19 @@ function renderCategoryManageList() {
 function renderPaymentManageList() {
   paymentManageList.innerHTML = '';
 
-  paymentMethods.forEach((pay) => {
+  paymentMethods.forEach((pay, idx) => {
     const matchedSubs = subscriptions.filter(
       (s) => s.status !== 'canceled' && (s.paymentMethod || 'other_pay') === pay.id
     );
     const usedCount = matchedSubs.length;
     const monthlySubtotal = matchedSubs.reduce((sum, s) => sum + getMonthlyEquivalent(s), 0);
     const isEditing = editingPaymentId === pay.id;
+    const isFirst = idx === 0;
+    const isLast = idx === paymentMethods.length - 1;
 
     const row = document.createElement('div');
     row.className = 'category-manage-item' + (isEditing ? ' editing' : '');
+    row.dataset.index = String(idx);
 
     if (isEditing) {
       row.innerHTML = `
@@ -627,8 +771,14 @@ function renderPaymentManageList() {
         </div>
       `;
     } else {
+      row.draggable = true;
       row.innerHTML = `
         <div class="category-manage-left">
+          <span class="drag-handle" title="ドラッグして並び替え">⠿</span>
+          <div class="order-btn-group">
+            <button type="button" class="order-btn pay-up-btn" data-id="${pay.id}" ${isFirst ? 'disabled' : ''} title="上へ移動" aria-label="上へ移動">↑</button>
+            <button type="button" class="order-btn pay-down-btn" data-id="${pay.id}" ${isLast ? 'disabled' : ''} title="下へ移動" aria-label="下へ移動">↓</button>
+          </div>
           <span>${escapeHtml(pay.icon)}</span>
           <span>${escapeHtml(pay.label)}</span>
           ${!pay.isDefault ? '<span class="category-badge-custom">カスタム</span>' : ''}
@@ -644,6 +794,33 @@ function renderPaymentManageList() {
           }
         </div>
       `;
+
+      row.addEventListener('dragstart', (e) => {
+        draggedPaymentIndex = idx;
+        row.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      row.addEventListener('dragend', () => {
+        draggedPaymentIndex = null;
+        row.classList.remove('dragging');
+        paymentManageList.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+      });
+      row.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (draggedPaymentIndex === null || draggedPaymentIndex === idx) return;
+        row.classList.add('drag-over');
+      });
+      row.addEventListener('dragleave', () => {
+        row.classList.remove('drag-over');
+      });
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        row.classList.remove('drag-over');
+        if (draggedPaymentIndex !== null && draggedPaymentIndex !== idx) {
+          reorderPaymentByIndex(draggedPaymentIndex, idx);
+        }
+        draggedPaymentIndex = null;
+      });
     }
 
     paymentManageList.appendChild(row);
@@ -706,6 +883,8 @@ function loadFromStorage() {
 
 function saveToStorage() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
+  sortCategoriesByAmountDesc();
+  sortPaymentsByAmountDesc();
 }
 
 function formatYen(amount) {
@@ -870,7 +1049,7 @@ function renderActiveList() {
           <div class="sub-subprice">${subPriceText}</div>
         </div>
         <div class="sub-actions">
-          <button class="action-btn cancel-sub" data-id="${item.id}" title="解約日を記録して解約済みリストへ移動">解約済みにする</button>
+          <button class="action-btn cancel-sub" data-id="${item.id}" title="解約日を記録して解約済みリストへ移動">解約</button>
           <button class="action-btn edit" data-id="${item.id}" aria-label="${escapeHtml(item.name)}を編集">編集</button>
           <button class="action-btn delete" data-id="${item.id}" aria-label="${escapeHtml(item.name)}を削除">削除</button>
         </div>
@@ -948,19 +1127,31 @@ function renderAll() {
   renderSummary();
   renderActiveList();
   renderCanceledList();
+  renderCategoryManageList();
+  renderPaymentManageList();
 }
 
-function switchPageView(showCanceled) {
-  isViewingCanceledPage = showCanceled;
-  if (showCanceled) {
-    activePageView.classList.add('hidden');
-    canceledPageView.classList.remove('hidden');
-    toggleCanceledPageBtn.classList.add('active-view');
-  } else {
-    canceledPageView.classList.add('hidden');
-    activePageView.classList.remove('hidden');
-    toggleCanceledPageBtn.classList.remove('active-view');
+function switchPageView(targetPage) {
+  currentPage = targetPage;
+
+  activePageView.classList.toggle('hidden', targetPage !== 'active');
+  canceledPageView.classList.toggle('hidden', targetPage !== 'canceled');
+  categoryPageView.classList.toggle('hidden', targetPage !== 'category');
+  paymentPageView.classList.toggle('hidden', targetPage !== 'payment');
+
+  toggleCanceledPageBtn.classList.toggle('active-view', targetPage === 'canceled');
+  openCategoryModalBtn.classList.toggle('active-view', targetPage === 'category');
+  openPaymentModalBtn.classList.toggle('active-view', targetPage === 'payment');
+
+  if (targetPage === 'category') {
+    editingCategoryId = null;
+    renderCategoryManageList();
+  } else if (targetPage === 'payment') {
+    editingPaymentId = null;
+    renderPaymentManageList();
   }
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function updateModalStatusFields() {
@@ -1040,30 +1231,6 @@ function openCancelSubModal(targetItem) {
 function closeCancelSubModal() {
   cancelSubModalOverlay.classList.add('hidden');
   cancelSubForm.reset();
-}
-
-function openCategoryModal() {
-  editingCategoryId = null;
-  renderCategoryManageList();
-  categoryModalOverlay.classList.remove('hidden');
-  manageCatLabel.focus();
-}
-
-function closeCategoryModal() {
-  editingCategoryId = null;
-  categoryModalOverlay.classList.add('hidden');
-}
-
-function openPaymentModal() {
-  editingPaymentId = null;
-  renderPaymentManageList();
-  paymentModalOverlay.classList.remove('hidden');
-  managePayLabel.focus();
-}
-
-function closePaymentModal() {
-  editingPaymentId = null;
-  paymentModalOverlay.classList.add('hidden');
 }
 
 // ==================== エクスポート・インポート機能 ====================
@@ -1418,8 +1585,8 @@ function handleListClick(e) {
 }
 
 function goHome() {
-  // 解約済み画面にいる場合は契約中画面へ戻す
-  switchPageView(false);
+  // 別ページにいる場合は契約中画面へ戻す
+  switchPageView('active');
 
   // 絞り込み条件をすべて解除（初期状態）
   currentFilter = 'all';
@@ -1442,15 +1609,15 @@ function setupEventListeners() {
   headerLogoHome?.addEventListener('click', goHome);
 
   toggleCanceledPageBtn.addEventListener('click', () => {
-    switchPageView(!isViewingCanceledPage);
+    switchPageView(currentPage === 'canceled' ? 'active' : 'canceled');
   });
 
   backToActiveBtn.addEventListener('click', () => {
-    switchPageView(false);
+    switchPageView('active');
   });
 
   openModalBtn.addEventListener('click', () =>
-    openModal(null, isViewingCanceledPage ? 'canceled' : 'active')
+    openModal(null, currentPage === 'canceled' ? 'canceled' : 'active')
   );
   emptyAddBtn.addEventListener('click', () => openModal(null, 'active'));
   addCanceledDirectlyBtn.addEventListener('click', () => openModal(null, 'canceled'));
@@ -1518,10 +1685,13 @@ function setupEventListeners() {
     }
   });
 
-  // カテゴリ管理モーダル
-  openCategoryModalBtn.addEventListener('click', openCategoryModal);
-  closeCategoryModalBtn.addEventListener('click', closeCategoryModal);
-  doneCategoryModalBtn.addEventListener('click', closeCategoryModal);
+  // カテゴリ管理ページ
+  openCategoryModalBtn.addEventListener('click', () => {
+    switchPageView(currentPage === 'category' ? 'active' : 'category');
+  });
+  backFromCategoryBtn.addEventListener('click', () => {
+    switchPageView('active');
+  });
 
   categoryManageForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1533,10 +1703,22 @@ function setupEventListeners() {
   });
 
   categoryManageList.addEventListener('click', (e) => {
+    const upBtn = e.target.closest('.cat-up-btn');
+    const downBtn = e.target.closest('.cat-down-btn');
     const editBtn = e.target.closest('.cat-edit-btn');
     const saveBtn = e.target.closest('.cat-save-btn');
     const cancelEditBtn = e.target.closest('.cat-cancel-btn');
     const delBtn = e.target.closest('.cat-delete-btn');
+
+    if (upBtn) {
+      moveCategory(upBtn.dataset.id, -1);
+      return;
+    }
+
+    if (downBtn) {
+      moveCategory(downBtn.dataset.id, 1);
+      return;
+    }
 
     if (editBtn) {
       editingCategoryId = editBtn.dataset.id;
@@ -1585,21 +1767,29 @@ function setupEventListeners() {
     }
   });
 
+  sortCategoriesByAmountBtn?.addEventListener('click', () => {
+    editingCategoryId = null;
+    sortCategoriesByAmountDesc();
+    renderCategoryManageList();
+  });
+
   resetCategoriesBtn.addEventListener('click', () => {
     if (confirm('カテゴリ一覧を初期状態に戻しますか？（編集した内容や独自に追加したカテゴリがリセットされます）')) {
       categories = DEFAULT_CATEGORIES.map((c) => ({ ...c }));
       editingCategoryId = null;
-      saveCategories();
-      renderCategoryOptions();
+      sortCategoriesByAmountDesc();
       renderCategoryManageList();
       renderAll();
     }
   });
 
-  // 支払い方法管理モーダル
-  openPaymentModalBtn.addEventListener('click', openPaymentModal);
-  closePaymentModalBtn.addEventListener('click', closePaymentModal);
-  donePaymentModalBtn.addEventListener('click', closePaymentModal);
+  // 支払い方法管理ページ
+  openPaymentModalBtn.addEventListener('click', () => {
+    switchPageView(currentPage === 'payment' ? 'active' : 'payment');
+  });
+  backFromPaymentBtn.addEventListener('click', () => {
+    switchPageView('active');
+  });
 
   paymentManageForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1611,10 +1801,22 @@ function setupEventListeners() {
   });
 
   paymentManageList.addEventListener('click', (e) => {
+    const upBtn = e.target.closest('.pay-up-btn');
+    const downBtn = e.target.closest('.pay-down-btn');
     const editBtn = e.target.closest('.pay-edit-btn');
     const saveBtn = e.target.closest('.pay-save-btn');
     const cancelEditBtn = e.target.closest('.pay-cancel-btn');
     const delBtn = e.target.closest('.pay-delete-btn');
+
+    if (upBtn) {
+      movePayment(upBtn.dataset.id, -1);
+      return;
+    }
+
+    if (downBtn) {
+      movePayment(downBtn.dataset.id, 1);
+      return;
+    }
 
     if (editBtn) {
       editingPaymentId = editBtn.dataset.id;
@@ -1663,12 +1865,17 @@ function setupEventListeners() {
     }
   });
 
+  sortPaymentsByAmountBtn?.addEventListener('click', () => {
+    editingPaymentId = null;
+    sortPaymentsByAmountDesc();
+    renderPaymentManageList();
+  });
+
   resetPaymentsBtn.addEventListener('click', () => {
     if (confirm('支払い方法一覧を初期状態に戻しますか？（編集した内容や独自に追加したカード名などがリセットされます）')) {
       paymentMethods = DEFAULT_PAYMENTS.map((p) => ({ ...p }));
       editingPaymentId = null;
-      savePayments();
-      renderPaymentOptions();
+      sortPaymentsByAmountDesc();
       renderPaymentManageList();
       renderAll();
     }
@@ -1717,14 +1924,6 @@ function setupEventListeners() {
     if (e.target === modalOverlay) closeModal();
   });
 
-  categoryModalOverlay.addEventListener('click', (e) => {
-    if (e.target === categoryModalOverlay) closeCategoryModal();
-  });
-
-  paymentModalOverlay.addEventListener('click', (e) => {
-    if (e.target === paymentModalOverlay) closePaymentModal();
-  });
-
   dataModalOverlay.addEventListener('click', (e) => {
     if (e.target === dataModalOverlay) closeDataModal();
   });
@@ -1733,8 +1932,6 @@ function setupEventListeners() {
     if (e.key === 'Escape') {
       if (!modalOverlay.classList.contains('hidden')) closeModal();
       if (!cancelSubModalOverlay.classList.contains('hidden')) closeCancelSubModal();
-      if (!categoryModalOverlay.classList.contains('hidden')) closeCategoryModal();
-      if (!paymentModalOverlay.classList.contains('hidden')) closePaymentModal();
       if (!dataModalOverlay.classList.contains('hidden')) closeDataModal();
     }
   });

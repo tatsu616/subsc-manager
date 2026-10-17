@@ -170,9 +170,109 @@
         <div id="canceledEmptyState" class="empty-state hidden">
           <div class="empty-icon">🗂️</div>
           <h2>解約済みのサブスクはありません</h2>
-          <p>契約中のサブスクの「解約済みにする」ボタンを押すと、解約日とともにここへ記録されます。</p>
+          <p>契約中のサブスクの「解約」ボタンを押すと、解約日とともにここへ記録されます。</p>
         </div>
       </main>
+    </div>
+
+    <!-- ==================== カテゴリ管理ページ ==================== -->
+    <div id="categoryPageView" class="hidden">
+      <div class="canceled-page-header">
+        <div>
+          <h2 class="canceled-page-title">🏷️ カテゴリの管理</h2>
+          <p class="canceled-page-subtitle">カテゴリの追加・名前やアイコンの編集・並び順の変更が行えます</p>
+        </div>
+        <button id="backFromCategoryBtn" class="btn btn-secondary">
+          ← 契約中の一覧に戻る
+        </button>
+      </div>
+
+      <section class="manage-page-card">
+        <form id="categoryManageForm" class="category-add-form">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="manageCatLabel">新しいカテゴリを追加</label>
+            <div class="quick-category-inputs">
+              <input
+                type="text"
+                id="manageCatIcon"
+                class="icon-input"
+                value="✨"
+                maxlength="4"
+                required
+                aria-label="アイコン"
+              />
+              <input
+                type="text"
+                id="manageCatLabel"
+                placeholder="カテゴリ名を入力（例: クラウド、美容、ニュース）"
+                maxlength="24"
+                required
+              />
+              <button type="submit" class="btn btn-primary">＋ 追加する</button>
+            </div>
+            <div class="emoji-presets" id="manageEmojiPresets"></div>
+          </div>
+        </form>
+      </section>
+
+      <div class="category-list-header">
+        <span>登録済みカテゴリ一覧（金額の大きい順・↑↓ボタンやドラッグで並び替え可能）</span>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <button type="button" id="sortCategoriesByAmountBtn" class="link-btn">金額順に並び替え</button>
+          <button type="button" id="resetCategoriesBtn" class="link-btn">初期状態に戻す</button>
+        </div>
+      </div>
+      <div id="categoryManageList" class="category-manage-list"></div>
+    </div>
+
+    <!-- ==================== 支払い方法管理ページ ==================== -->
+    <div id="paymentPageView" class="hidden">
+      <div class="canceled-page-header">
+        <div>
+          <h2 class="canceled-page-title">💳 支払い方法の管理</h2>
+          <p class="canceled-page-subtitle">クレジットカード・口座・決済サービスの追加・編集・並び順の変更が行えます</p>
+        </div>
+        <button id="backFromPaymentBtn" class="btn btn-secondary">
+          ← 契約中の一覧に戻る
+        </button>
+      </div>
+
+      <section class="manage-page-card">
+        <form id="paymentManageForm" class="category-add-form">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="managePayLabel">新しい支払い方法を追加</label>
+            <div class="quick-category-inputs">
+              <input
+                type="text"
+                id="managePayIcon"
+                class="icon-input"
+                value="💳"
+                maxlength="4"
+                required
+                aria-label="アイコン"
+              />
+              <input
+                type="text"
+                id="managePayLabel"
+                placeholder="例: 楽天カード (末尾1234)、三井住友カード、メイン銀行口座"
+                maxlength="28"
+                required
+              />
+              <button type="submit" class="btn btn-primary">＋ 追加する</button>
+            </div>
+            <div class="emoji-presets" id="managePaymentEmojiPresets"></div>
+          </div>
+        </form>
+      </section>
+
+      <div class="category-list-header">
+        <span>登録済み支払い方法一覧（金額の大きい順・↑↓ボタンやドラッグで並び替え可能）</span>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <button type="button" id="sortPaymentsByAmountBtn" class="link-btn">金額順に並び替え</button>
+          <button type="button" id="resetPaymentsBtn" class="link-btn">初期状態に戻す</button>
+        </div>
+      </div>
+      <div id="paymentManageList" class="category-manage-list"></div>
     </div>
   </div>
 
@@ -353,98 +453,6 @@
           <button type="submit" class="btn btn-primary">解約済みリストへ移動</button>
         </div>
       </form>
-    </div>
-  </div>
-
-  <!-- カテゴリ管理モーダル -->
-  <div id="categoryModalOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="categoryModalTitle">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h2 id="categoryModalTitle">🏷️ カテゴリの管理</h2>
-        <button id="closeCategoryModalBtn" class="icon-btn" aria-label="閉じる">✕</button>
-      </div>
-
-      <form id="categoryManageForm" class="category-add-form">
-        <div class="form-group" style="margin-bottom: 10px;">
-          <label for="manageCatLabel">新しいカテゴリを追加</label>
-          <div class="quick-category-inputs">
-            <input
-              type="text"
-              id="manageCatIcon"
-              class="icon-input"
-              value="✨"
-              maxlength="4"
-              required
-              aria-label="アイコン"
-            />
-            <input
-              type="text"
-              id="manageCatLabel"
-              placeholder="カテゴリ名を入力（例: クラウド、美容）"
-              maxlength="24"
-              required
-            />
-            <button type="submit" class="btn btn-primary btn-sm">追加</button>
-          </div>
-          <div class="emoji-presets" id="manageEmojiPresets"></div>
-        </div>
-      </form>
-
-      <div class="category-list-header">
-        <span>登録済みカテゴリ一覧</span>
-        <button type="button" id="resetCategoriesBtn" class="link-btn">初期状態に戻す</button>
-      </div>
-      <div id="categoryManageList" class="category-manage-list"></div>
-
-      <div class="modal-actions">
-        <button type="button" id="doneCategoryModalBtn" class="btn btn-primary">完了</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 支払い方法管理モーダル -->
-  <div id="paymentModalOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="paymentModalTitle">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h2 id="paymentModalTitle">💳 支払い方法の管理</h2>
-        <button id="closePaymentModalBtn" class="icon-btn" aria-label="閉じる">✕</button>
-      </div>
-
-      <form id="paymentManageForm" class="category-add-form">
-        <div class="form-group" style="margin-bottom: 10px;">
-          <label for="managePayLabel">新しい支払い方法を追加</label>
-          <div class="quick-category-inputs">
-            <input
-              type="text"
-              id="managePayIcon"
-              class="icon-input"
-              value="💳"
-              maxlength="4"
-              required
-              aria-label="アイコン"
-            />
-            <input
-              type="text"
-              id="managePayLabel"
-              placeholder="例: 楽天カード (末尾1234)、メイン口座"
-              maxlength="28"
-              required
-            />
-            <button type="submit" class="btn btn-primary btn-sm">追加</button>
-          </div>
-          <div class="emoji-presets" id="managePaymentEmojiPresets"></div>
-        </div>
-      </form>
-
-      <div class="category-list-header">
-        <span>登録済み支払い方法（契約中の月額引落内訳）</span>
-        <button type="button" id="resetPaymentsBtn" class="link-btn">初期状態に戻す</button>
-      </div>
-      <div id="paymentManageList" class="category-manage-list"></div>
-
-      <div class="modal-actions">
-        <button type="button" id="donePaymentModalBtn" class="btn btn-primary">完了</button>
-      </div>
     </div>
   </div>
 

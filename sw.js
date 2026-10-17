@@ -1,4 +1,4 @@
-const CACHE_NAME = 'subsc-manager-cache-v7';
+const CACHE_NAME = 'subsc-manager-cache-v11';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
