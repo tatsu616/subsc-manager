@@ -1435,16 +1435,7 @@ function goHome() {
   renderActiveList();
 }
 
-function renderStoragePathFooter() {
-  const footerEl = document.getElementById('storagePathInfo');
-  if (!footerEl) return;
-  const appPath = '/Users/tatsu/.gemini/antigravity/scratch/subsc-manager';
-  footerEl.textContent = `データ保管場所パス: ${appPath} ｜ ブラウザ保存領域 (localStorage): ${STORAGE_KEY}, ${CATEGORY_STORAGE_KEY}, ${PAYMENT_STORAGE_KEY}`;
-}
-
 function setupEventListeners() {
-  renderStoragePathFooter();
-
   const homeBtn = document.getElementById('homeBtn');
   const headerLogoHome = document.getElementById('headerLogoHome');
   homeBtn?.addEventListener('click', goHome);
