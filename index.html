@@ -71,10 +71,20 @@
 
       <!-- フィルター＆並び替えバー -->
       <section class="toolbar">
-        <div class="filter-group">
-          <button class="chip active" data-filter="all">すべて</button>
-          <button class="chip" data-filter="monthly">月額のみ</button>
-          <button class="chip" data-filter="yearly">年額のみ</button>
+        <div class="toolbar-left">
+          <div class="filter-group">
+            <button class="chip active" data-filter="all">すべて</button>
+            <button class="chip" data-filter="monthly">月額のみ</button>
+            <button class="chip" data-filter="yearly">年額のみ</button>
+          </div>
+          <div class="layout-toggle-group" role="group" aria-label="表示レイアウト切り替え">
+            <button type="button" id="layoutCardBtn" class="layout-toggle-btn active" data-layout="card" title="カード表示">
+              📇 カード
+            </button>
+            <button type="button" id="layoutTableBtn" class="layout-toggle-btn" data-layout="table" title="表（テーブル）表示">
+              📋 表形式
+            </button>
+          </div>
         </div>
         <div class="toolbar-right">
           <div class="sort-group">

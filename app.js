@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'subsc_manager_items_v1';
 const CATEGORY_STORAGE_KEY = 'subsc_manager_categories_v1';
 const PAYMENT_STORAGE_KEY = 'subsc_manager_payments_v1';
+const LAYOUT_STORAGE_KEY = 'subsc_manager_layout_v1';
 
 // 標準カテゴリ一覧
 const DEFAULT_CATEGORIES = [
@@ -93,6 +94,7 @@ let currentPaymentFilter = 'all';
 let currentSort = 'created-desc';
 let currentCanceledSort = 'canceled-desc';
 let currentPage = 'active'; // 'active' | 'canceled' | 'category' | 'payment'
+let currentLayout = 'card'; // 'card' | 'table'
 
 // インライン編集中のID
 let editingCategoryId = null;
@@ -211,8 +213,40 @@ const sortSelect = document.getElementById('sortSelect');
 const categoryFilterSelect = document.getElementById('categoryFilterSelect');
 const paymentFilterSelect = document.getElementById('paymentFilterSelect');
 const filterChips = document.querySelectorAll('.chip');
+const layoutCardBtn = document.getElementById('layoutCardBtn');
+const layoutTableBtn = document.getElementById('layoutTableBtn');
+
+function loadLayoutMode() {
+  try {
+    const saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (saved === 'table' || saved === 'card') {
+      currentLayout = saved;
+    }
+  } catch (err) {
+    currentLayout = 'card';
+  }
+  updateLayoutButtons();
+}
+
+function updateLayoutButtons() {
+  layoutCardBtn?.classList.toggle('active', currentLayout === 'card');
+  layoutTableBtn?.classList.toggle('active', currentLayout === 'table');
+}
+
+function setLayoutMode(mode) {
+  if (mode !== 'card' && mode !== 'table') return;
+  currentLayout = mode;
+  try {
+    localStorage.setItem(LAYOUT_STORAGE_KEY, currentLayout);
+  } catch (err) {
+    // ignore storage error
+  }
+  updateLayoutButtons();
+  renderActiveList();
+}
 
 function init() {
+  loadLayoutMode();
   loadCategories();
   loadPayments();
   loadFromStorage();
@@ -942,6 +976,48 @@ function getFilteredAndSortedActiveItems() {
 
   return filtered.sort((a, b) => {
     switch (currentSort) {
+      case 'name-desc':
+        return b.name.localeCompare(a.name, 'ja') || b.createdAt - a.createdAt;
+      case 'name-asc':
+        return a.name.localeCompare(b.name, 'ja') || a.createdAt - b.createdAt;
+      case 'rawPrice-desc':
+        return b.price - a.price || b.createdAt - a.createdAt;
+      case 'rawPrice-asc':
+        return a.price - b.price || a.createdAt - b.createdAt;
+      case 'price-desc':
+        return getMonthlyEquivalent(b) - getMonthlyEquivalent(a) || b.createdAt - a.createdAt;
+      case 'price-asc':
+        return getMonthlyEquivalent(a) - getMonthlyEquivalent(b) || a.createdAt - b.createdAt;
+      case 'cycle-desc':
+        return (
+          b.billingCycle.localeCompare(a.billingCycle) ||
+          getMonthlyEquivalent(b) - getMonthlyEquivalent(a)
+        );
+      case 'cycle-asc':
+        return (
+          a.billingCycle.localeCompare(b.billingCycle) ||
+          getMonthlyEquivalent(b) - getMonthlyEquivalent(a)
+        );
+      case 'category-desc': {
+        const labelA = getCategoryById(a.category).label;
+        const labelB = getCategoryById(b.category).label;
+        return labelB.localeCompare(labelA, 'ja') || getMonthlyEquivalent(b) - getMonthlyEquivalent(a);
+      }
+      case 'category-asc': {
+        const labelA = getCategoryById(a.category).label;
+        const labelB = getCategoryById(b.category).label;
+        return labelA.localeCompare(labelB, 'ja') || getMonthlyEquivalent(b) - getMonthlyEquivalent(a);
+      }
+      case 'payment-desc': {
+        const payA = getPaymentById(a.paymentMethod).label;
+        const payB = getPaymentById(b.paymentMethod).label;
+        return payB.localeCompare(payA, 'ja') || getMonthlyEquivalent(b) - getMonthlyEquivalent(a);
+      }
+      case 'payment-asc': {
+        const payA = getPaymentById(a.paymentMethod).label;
+        const payB = getPaymentById(b.paymentMethod).label;
+        return payA.localeCompare(payB, 'ja') || getMonthlyEquivalent(b) - getMonthlyEquivalent(a);
+      }
       case 'started-desc': {
         const sA = a.startedAt || '0000-00-00';
         const sB = b.startedAt || '0000-00-00';
@@ -952,17 +1028,39 @@ function getFilteredAndSortedActiveItems() {
         const sB = b.startedAt || '9999-99-99';
         return sA.localeCompare(sB) || a.createdAt - b.createdAt;
       }
-      case 'price-desc':
-        return getMonthlyEquivalent(b) - getMonthlyEquivalent(a);
-      case 'price-asc':
-        return getMonthlyEquivalent(a) - getMonthlyEquivalent(b);
-      case 'name-asc':
-        return a.name.localeCompare(b.name, 'ja');
       case 'created-desc':
       default:
         return b.createdAt - a.createdAt;
     }
   });
+}
+
+function toggleTableColumnSort(sortKey) {
+  if (!sortKey) return;
+  if (currentSort === `${sortKey}-desc`) {
+    currentSort = `${sortKey}-asc`;
+  } else {
+    currentSort = `${sortKey}-desc`;
+  }
+
+  // ドロップダウンに対応項目があれば同期する
+  if (sortSelect && Array.from(sortSelect.options).some((opt) => opt.value === currentSort)) {
+    sortSelect.value = currentSort;
+  }
+
+  renderActiveList();
+}
+
+function renderSortableTh(label, sortKey, extraClass = '') {
+  const isDesc = currentSort === `${sortKey}-desc`;
+  const isAsc = currentSort === `${sortKey}-asc`;
+  const isActive = isDesc || isAsc;
+  const indicator = isDesc ? '▼' : isAsc ? '▲' : '⇅';
+  const classes = ['sortable-th', extraClass, isActive ? 'active-sort' : '']
+    .filter(Boolean)
+    .join(' ');
+
+  return `<th class="${classes}" data-sort-key="${sortKey}" title="クリックで「${label}」の降順・昇順を切り替え"><span class="th-sort-inner"><span>${label}</span><span class="sort-indicator">${indicator}</span></span></th>`;
 }
 
 function getSortedCanceledItems() {
@@ -1007,6 +1105,99 @@ function renderActiveList() {
         <p>条件に一致するサブスクがありません。</p>
       </div>
     `;
+    return;
+  }
+
+  if (currentLayout === 'table') {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'sub-table-wrapper';
+
+    const rowsHtml = items
+      .map((item) => {
+        const cat = getCategoryById(item.category);
+        const pay = getPaymentById(item.paymentMethod);
+        const isYearly = item.billingCycle === 'yearly';
+        const cycleLabel = isYearly ? '年額' : '月額';
+        const cycleUnit = isYearly ? '/年' : '/月';
+        const monthlyEq = formatYen(getMonthlyEquivalent(item));
+        const duration = item.startedAt ? calcDurationText(item.startedAt) : '';
+
+        return `
+          <tr>
+            <td>
+              <div class="table-service-cell">
+                <span class="table-service-icon" title="${escapeHtml(cat.label)}">${escapeHtml(cat.icon)}</span>
+                <div>
+                  <div class="table-service-name">${escapeHtml(item.name)}</div>
+                  ${item.memo ? `<div class="table-service-memo">${escapeHtml(item.memo)}</div>` : ''}
+                </div>
+              </div>
+            </td>
+            <td class="num-col">
+              <div class="table-price-main">${formatYen(item.price)}<span class="cycle-unit">${cycleUnit}</span></div>
+            </td>
+            <td class="num-col">
+              <div class="table-price-main">${monthlyEq}<span class="cycle-unit">/月</span></div>
+            </td>
+            <td class="table-meta-cell">
+              <span class="cycle-badge ${item.billingCycle}">${cycleLabel}</span>
+            </td>
+            <td class="table-meta-cell">
+              <span class="category-tag">${escapeHtml(cat.icon)} ${escapeHtml(cat.label)}</span>
+            </td>
+            <td class="table-meta-cell">
+              <span class="payment-tag">${escapeHtml(pay.icon)} ${escapeHtml(pay.label)}</span>
+            </td>
+            <td class="table-meta-cell">
+              ${
+                item.startedAt
+                  ? `<div>${escapeHtml(item.startedAt.replace(/-/g, '/'))}</div>${duration ? `<div class="table-date-sub">(${escapeHtml(duration)})</div>` : ''}`
+                  : '<span style="color:var(--text-sub);">-</span>'
+              }
+            </td>
+            <td class="action-col">
+              <div class="sub-actions" style="justify-content: flex-end;">
+                <button class="action-btn cancel-sub" data-id="${item.id}" title="解約日を記録して解約済みリストへ移動">解約</button>
+                <button class="action-btn edit" data-id="${item.id}" aria-label="${escapeHtml(item.name)}を編集">編集</button>
+                <button class="action-btn delete" data-id="${item.id}" aria-label="${escapeHtml(item.name)}を削除">削除</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const totalMonthlyFiltered = items.reduce((sum, i) => sum + getMonthlyEquivalent(i), 0);
+    const totalYearlyFiltered = items.reduce((sum, i) => sum + getYearlyEquivalent(i), 0);
+
+    wrapper.innerHTML = `
+      <table class="sub-table">
+        <thead>
+          <tr>
+            ${renderSortableTh('サービス名', 'name')}
+            ${renderSortableTh('契約料金', 'rawPrice', 'num-col')}
+            ${renderSortableTh('月額換算', 'price', 'num-col')}
+            ${renderSortableTh('周期', 'cycle')}
+            ${renderSortableTh('カテゴリ', 'category')}
+            ${renderSortableTh('支払い方法', 'payment')}
+            ${renderSortableTh('契約開始日', 'started')}
+            <th class="action-col">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2">合計（表示中 ${items.length}件）</td>
+            <td class="num-col" style="color: var(--primary);">月 ${formatYen(totalMonthlyFiltered)}</td>
+            <td colspan="5" style="color: var(--text-sub); font-weight: 600;">年間換算: ${formatYen(totalYearlyFiltered)}/年</td>
+          </tr>
+        </tfoot>
+      </table>
+    `;
+
+    subscriptionListEl.appendChild(wrapper);
     return;
   }
 
@@ -1547,6 +1738,12 @@ function handleCancelSubFormSubmit(e) {
 }
 
 function handleListClick(e) {
+  const sortTh = e.target.closest('th[data-sort-key]');
+  if (sortTh) {
+    toggleTableColumnSort(sortTh.dataset.sortKey);
+    return;
+  }
+
   const cancelSubBtn = e.target.closest('.action-btn.cancel-sub');
   const restoreSubBtn = e.target.closest('.action-btn.restore-sub');
   const editBtn = e.target.closest('.action-btn.edit');
@@ -1939,6 +2136,14 @@ function setupEventListeners() {
   subscriptionForm.addEventListener('submit', handleFormSubmit);
   subscriptionListEl.addEventListener('click', handleListClick);
   canceledSubscriptionListEl.addEventListener('click', handleListClick);
+
+  layoutCardBtn?.addEventListener('click', () => {
+    setLayoutMode('card');
+  });
+
+  layoutTableBtn?.addEventListener('click', () => {
+    setLayoutMode('table');
+  });
 
   filterChips.forEach((chip) => {
     chip.addEventListener('click', () => {
