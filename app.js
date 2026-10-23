@@ -91,6 +91,7 @@ let paymentMethods = [];
 let currentFilter = 'all';
 let currentCategoryFilter = 'all';
 let currentPaymentFilter = 'all';
+let currentSearchQuery = '';
 let currentSort = 'created-desc';
 let currentCanceledSort = 'canceled-desc';
 let currentPage = 'active'; // 'active' | 'canceled' | 'category' | 'payment'
@@ -215,6 +216,8 @@ const paymentFilterSelect = document.getElementById('paymentFilterSelect');
 const filterChips = document.querySelectorAll('.chip');
 const layoutCardBtn = document.getElementById('layoutCardBtn');
 const layoutTableBtn = document.getElementById('layoutTableBtn');
+const searchInput = document.getElementById('searchInput');
+const clearSearchBtn = document.getElementById('clearSearchBtn');
 
 function loadLayoutMode() {
   try {
@@ -966,12 +969,24 @@ function renderSummary() {
 
 function getFilteredAndSortedActiveItems() {
   const activeSubs = getActiveSubscriptions();
+  const queryWords = currentSearchQuery
+    .trim()
+    .toLowerCase()
+    .split(/[\s\u3000]+/)
+    .filter(Boolean);
+
   const filtered = activeSubs.filter((item) => {
     const matchCycle = currentFilter === 'all' || item.billingCycle === currentFilter;
     const matchCategory = currentCategoryFilter === 'all' || item.category === currentCategoryFilter;
     const itemPay = item.paymentMethod || 'other_pay';
     const matchPayment = currentPaymentFilter === 'all' || itemPay === currentPaymentFilter;
-    return matchCycle && matchCategory && matchPayment;
+
+    if (!matchCycle || !matchCategory || !matchPayment) return false;
+    if (queryWords.length === 0) return true;
+
+    const nameLower = (item.name || '').toLowerCase();
+    const memoLower = (item.memo || '').toLowerCase();
+    return queryWords.every((word) => nameLower.includes(word) || memoLower.includes(word));
   });
 
   return filtered.sort((a, b) => {
@@ -1789,12 +1804,15 @@ function goHome() {
   currentFilter = 'all';
   currentCategoryFilter = 'all';
   currentPaymentFilter = 'all';
+  currentSearchQuery = '';
 
   filterChips.forEach((c) => {
     c.classList.toggle('active', c.dataset.filter === 'all');
   });
   categoryFilterSelect.value = 'all';
   paymentFilterSelect.value = 'all';
+  if (searchInput) searchInput.value = '';
+  clearSearchBtn?.classList.add('hidden');
 
   renderActiveList();
 }
@@ -2143,6 +2161,22 @@ function setupEventListeners() {
 
   layoutTableBtn?.addEventListener('click', () => {
     setLayoutMode('table');
+  });
+
+  searchInput?.addEventListener('input', (e) => {
+    currentSearchQuery = e.target.value;
+    clearSearchBtn?.classList.toggle('hidden', currentSearchQuery.length === 0);
+    renderActiveList();
+  });
+
+  clearSearchBtn?.addEventListener('click', () => {
+    currentSearchQuery = '';
+    if (searchInput) {
+      searchInput.value = '';
+      searchInput.focus();
+    }
+    clearSearchBtn.classList.add('hidden');
+    renderActiveList();
   });
 
   filterChips.forEach((chip) => {
